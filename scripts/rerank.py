@@ -5,7 +5,8 @@ Stdlib only. Reads ANTHROPIC_API_KEY from the environment. Responses cached in d
 """
 import json, os, hashlib, urllib.request
 
-MODEL = os.environ.get("RERANK_MODEL", "claude-haiku-5-5")
+BACKEND = "anthropic" if os.environ.get("ANTHROPIC_API_KEY") else "ollama"  # free local default
+MODEL = os.environ.get("RERANK_MODEL", "claude-haiku-5-5" if BACKEND == "anthropic" else "qwen2.5:3b")
 CACHE = "data/llm_cache.jsonl"
 
 if os.path.exists(".env"):  # KEY=value lines, gitignored
@@ -53,18 +54,29 @@ def call(line, cands, dry=False):
     cache = _load()
     if h in cache: return cache[h]
     if dry: return {"choice": 1, "confidence": 0.0, "reason": "dry run", "_prompt": p}
+    out = (_anthropic if BACKEND == "anthropic" else _ollama)(p)
+    cache[h] = out
+    with open(CACHE, "a") as f: f.write(json.dumps({"h": h, "out": out}) + "\n")
+    return out
+
+def _post(url, body, headers):
+    req = urllib.request.Request(url, data=json.dumps(body).encode(), headers={"content-type": "application/json", **headers})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        return json.load(r)
+
+def _ollama(p):
+    resp = _post("http://localhost:11434/api/chat", {
+        "model": MODEL, "stream": False, "format": TOOL["input_schema"], "options": {"temperature": 0},
+        "messages": [{"role": "system", "content": SYSTEM + " Reply as JSON with choice, confidence, reason."},
+                     {"role": "user", "content": p}]}, {})
+    return json.loads(resp["message"]["content"])
+
+def _anthropic(p):
     body = {
         "model": MODEL, "max_tokens": 200, "system": SYSTEM,
         "tools": [TOOL], "tool_choice": {"type": "tool", "name": "pick_match"},
         "messages": [{"role": "user", "content": p}],
     }
-    req = urllib.request.Request(
-        "https://api.anthropic.com/v1/messages", data=json.dumps(body).encode(),
-        headers={"x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01",
-                 "content-type": "application/json"})
-    with urllib.request.urlopen(req, timeout=60) as r:
-        resp = json.load(r)
-    out = next(b["input"] for b in resp["content"] if b["type"] == "tool_use")
-    cache[h] = out
-    with open(CACHE, "a") as f: f.write(json.dumps({"h": h, "out": out}) + "\n")
-    return out
+    resp = _post("https://api.anthropic.com/v1/messages", body,
+                 {"x-api-key": os.environ["ANTHROPIC_API_KEY"], "anthropic-version": "2023-06-01"})
+    return next(b["input"] for b in resp["content"] if b["type"] == "tool_use")

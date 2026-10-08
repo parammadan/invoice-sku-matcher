@@ -10,7 +10,7 @@ m = BM25Matcher("data/catalog.csv")
 name_of = {r["key"]: r["name"] for r in m.rows}
 
 def correct(key, target):  # exact SKU, or a text-identical duplicate SKU of the same size
-    return key == target or (key and name_of[key] == name_of[target] and key.split("|", 1)[1] == target.split("|", 1)[1])
+    return key == target or bool(key and name_of[key] == name_of[target] and key.split("|", 1)[1] == target.split("|", 1)[1])
 
 results = []
 for g in gold:
