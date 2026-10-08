@@ -8,6 +8,11 @@ import json, os, hashlib, urllib.request
 MODEL = os.environ.get("RERANK_MODEL", "claude-haiku-5-5")
 CACHE = "data/llm_cache.jsonl"
 
+if os.path.exists(".env"):  # KEY=value lines, gitignored
+    for l in open(".env"):
+        if "=" in l and not l.lstrip().startswith("#"):
+            k, v = l.strip().split("=", 1); os.environ.setdefault(k, v)
+
 SYSTEM = """You match lines from liquor distributor invoices to a store's product catalog.
 Size and pack already match for every candidate. Decide whether the invoice line is the SAME
 product as one candidate. Ignore catalog noise such as status prefixes (e.g. SOOH, CM, HA),
