@@ -92,6 +92,25 @@ transitions (the old SKU tails off as the new one ramps). A per-SKU slow-mover r
 a product selling about 2,000 bottles. **Slow movers have to be computed per product, so duplicates
 must be resolved first.**
 
+### 4. In Postgres + pgvector
+
+`scripts/pg_eval.py` loads the catalog and vectors into Postgres 16 + pgvector and runs the
+size-filtered search in one SQL query (`CROSS JOIN LATERAL … WHERE pack = … AND volume_ml = …
+ORDER BY embedding <=> query LIMIT 5`). It reproduces the Python numbers exactly.
+
+| | Top-1 | Top-5 | Queries with < 5 results | ms/query |
+|---|---|---|---|---|
+| **Exact: btree size filter, then sort by distance** | **89.9%** | **99.0%** | 0 | 4.7 |
+| HNSW, `iterative_scan = off` | 88.9% | 97.9% | **38 (10%)** | 0.3 |
+| HNSW, `iterative_scan = relaxed_order` + exact re-sort | 89.4% | 98.7% | 0 | 0.4 |
+
+**The trap:** HNSW collects `ef_search` nearest neighbours first and applies the `WHERE` after, so
+with a selective filter (one pack/volume) 10% of queries **silently return fewer than 5
+candidates**. That's a review queue missing its right answer, with no error raised.
+pgvector 0.8's iterative scan fixes it, and `relaxed_order` needs an exact re-sort on top.
+**At store-catalog size (thousands of SKUs per size bucket), exact filtered search at ~5 ms is the
+right call.** HNSW only earns its place across a multi-store or industry-wide catalog.
+
 ## What didn't work
 
 **A local 3B LLM re-ranker (Qwen2.5-3B via Ollama) made things worse.** On a 40-query sample it got
@@ -123,6 +142,10 @@ python3 -I scripts/build_eval.py
 ollama pull nomic-embed-text && python3 -I scripts/embed.py   # ~7 min on an M1, needs `ollama serve`
 python3 -I scripts/sales_by_key.py data/sales_2026.zip data/sales_2026_by_key.json
 python3 -I scripts/report.py
+
+# optional: Postgres 16+ with pgvector (project-local instance on port 5433)
+initdb -D data/pg -U matcher --auth=trust && pg_ctl -D data/pg -o "-p 5433 -k /tmp" -l data/pg.log start
+python3 -I scripts/pg_eval.py
 ```
 
 | File | What it does |
@@ -133,4 +156,5 @@ python3 -I scripts/report.py
 | `scripts/equiv.py` | `USE CODE` redirect resolution + equivalence for scoring |
 | `scripts/dedupe.py` | duplicate-SKU detection with recall on redirects |
 | `scripts/rerank.py` | optional LLM re-ranker (Ollama or Anthropic) |
-| `scripts/report.py` | every number in this README |
+| `scripts/pg_eval.py` | the same search in Postgres + pgvector: exact vs HNSW |
+| `scripts/report.py` | every number in sections 1–3 |
