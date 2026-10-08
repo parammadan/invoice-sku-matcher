@@ -1,13 +1,19 @@
 """Baseline matcher: BM25 over catalog names, optionally hard-filtered on pack + volume."""
 import csv, math, re, collections
 
+# "USE CODE 42631" / "- USE 25776" are catalog redirect notes, not part of the product name
+REDIRECT = re.compile(r"-?\s*USE\s+(?:CODE\s+)?\d+")
+
+def index_name(name):
+    return REDIRECT.sub("", name).strip()
+
 def tokens(s):
     return re.findall(r"[a-z0-9]+", s.lower())
 
 class BM25Matcher:
     def __init__(self, catalog_path, k1=1.2, b=0.75):
         self.rows = list(csv.DictReader(open(catalog_path)))
-        self.docs = [tokens(r["name"]) for r in self.rows]
+        self.docs = [tokens(index_name(r["name"])) for r in self.rows]
         self.k1, self.b = k1, b
         self.avgdl = sum(map(len, self.docs)) / len(self.docs)
         df = collections.Counter(t for d in self.docs for t in set(d))

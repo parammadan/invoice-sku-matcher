@@ -4,7 +4,7 @@ A small, free, fully reproducible study of the matching step behind invoice rece
 given a distributor line like `SOOH FLOR DE CANA 12YR CENTENARIO`, find the store's catalog SKU,
 **at the right size**, and know when to ask a human instead.
 
-Everything runs on a laptop with Python's standard library. No API keys, no paid models.
+Everything runs on a laptop: Python's standard library plus a local [Ollama](https://ollama.com) embedding model. No API keys, no paid models.
 
 ## Data (all real)
 
@@ -31,11 +31,20 @@ because no text matcher could separate them.
 
 | | Correct top-1 | Right answer in top 5 | Wrong-size top-1 |
 |---|---|---|---|
-| BM25, text only | 76.4% | 96.4% | 2.1% |
-| **BM25 + hard size/pack filter** | **88.3%** | **97.9%** | **0.0%** |
+| BM25, text only | 78.2% | 96.9% | 2.1% |
+| BM25 + hard size/pack filter | 89.1% | 97.9% | **0.0%** |
+| **Embeddings + size filter** (nomic-embed-text, local) | **89.9%** | **99.0%** | **0.0%** |
+| Hybrid, reciprocal rank fusion + size filter | 89.6% | 97.9% | 0.0% |
 
-Filtering on pack and volume before ranking is the biggest single win. It also removes the most
-expensive error: right product, wrong size. That error silently corrupts cost per bottle and margin alerts.
+- **Filtering on pack and volume before ranking is the biggest single win.** It also removes the
+  most expensive error: right product, wrong size. That error silently corrupts cost per bottle and margin alerts.
+- **BM25 and embeddings fail on different lines.** Embeddings catch meaning: the real rebrand
+  `PLANTATION RUM` → `PLANTERAY RUM`, `DR` → `DOCTOR`, `CLASSIC` → `ORIGINAL`. BM25 catches exact
+  tokens embeddings blur: `OLD FORESTER 1920`, `ZONE VODKA`. 9 lines only BM25 gets right,
+  12 only embeddings get right. Naive RRF fusion doesn't beat embeddings alone at top-1.
+- **Redirect notes are stripped before indexing.** `FLOR DE CANA 12YR … USE CODE 42631` lost to
+  the shorter `FLOR DE CANA 25YR` because the note's three tokens triggered BM25's length penalty. Wrong age,
+  far more expensive bottle. The note is metadata, not the name.
 
 ### 2. Confidence gate: when to skip the human
 
@@ -45,12 +54,16 @@ rules. The margin between candidates 1 and 2 is the confidence.
 
 | Gate | Auto-accepted | Precision of auto-accepts | Sent to review |
 |---|---|---|---|
-| none | 100% | 87.6% | 0 |
-| margin ≥ 0.2 | 54.7% | 96.7% | 175 |
-| **margin ≥ 0.3** | **42.2%** | **98.8%** | 223 |
+| none | 100% | 89.4% | 0 |
+| margin ≥ 0.2 | 51.8% | 97.0% | 186 |
+| **margin ≥ 0.3** | **41.5%** | **99.4%** | 226 |
+| BM25 and embeddings agree | 94.3% | 92.6% | 22 |
 
-**42% of lines need no human, and those are right 98.8% of the time.** The rest go to a review
-queue with the top candidates already ranked: the right answer is in the top 5 for 97.9% of lines.
+**41.5% of lines need no human, and those are right 99.4% of the time.** The rest go to a review
+queue with candidates already ranked: embeddings put the right answer in the top 5 for 99.0% of lines.
+
+Agreement between BM25 and embeddings sounds like a good confidence signal but isn't: when both
+are wrong, they're usually wrong *together*, picking the same text-twin of a duplicate SKU (section 3).
 
 ### 3. Duplicate SKUs
 
@@ -107,6 +120,7 @@ for y in 2024:1261 2025:1262 2026:1263; do
   python3 -I scripts/extract_products.py data/sales_${y%%:*}.zip data/products_${y%%:*}.csv
 done
 python3 -I scripts/build_eval.py
+ollama pull nomic-embed-text && python3 -I scripts/embed.py   # ~7 min on an M1, needs `ollama serve`
 python3 -I scripts/sales_by_key.py data/sales_2026.zip data/sales_2026_by_key.json
 python3 -I scripts/report.py
 ```
@@ -114,6 +128,7 @@ python3 -I scripts/report.py
 | File | What it does |
 |---|---|
 | `scripts/matcher.py` | BM25 + hard size/pack filter |
+| `scripts/embed.py`, `scripts/hybrid.py` | local embeddings, dense search, RRF hybrid |
 | `scripts/overlap_rerank.py` | IDF-weighted overlap re-score + margin confidence |
 | `scripts/equiv.py` | `USE CODE` redirect resolution + equivalence for scoring |
 | `scripts/dedupe.py` | duplicate-SKU detection with recall on redirects |

@@ -6,11 +6,11 @@ redirects act as labeled true duplicates we can measure recall against.
 """
 import csv, re, math, json, sys, collections, itertools
 sys.path.insert(0, "scripts")
-from matcher import tokens
+from matcher import tokens, index_name
 
 REDIRECT = re.compile(r"-?\s*USE\s+(?:CODE\s+)?(\d+)")
 rows = list(csv.DictReader(open("data/catalog.csv")))
-clean = {r["key"]: REDIRECT.sub("", r["name"]).strip() for r in rows}
+clean = {r["key"]: index_name(r["name"]) for r in rows}
 toks = {k: set(tokens(v)) for k, v in clean.items()}
 df = collections.Counter(t for s in toks.values() for t in s)
 N = len(rows)
