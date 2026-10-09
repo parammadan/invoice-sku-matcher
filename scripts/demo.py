@@ -2,6 +2,7 @@
 
     python3 -I scripts/demo.py --before   # keyword search: no size filter, redirect notes left in names
     python3 -I scripts/demo.py --after    # size/pack hard filter + redirect notes stripped, then headline results
+    python3 -I scripts/demo.py --checks   # saved pgvector + 7B LLM results
 """
 import json, re, sys, time
 sys.path.insert(0, "scripts")
@@ -10,6 +11,31 @@ from matcher import BM25Matcher
 from equiv import build
 
 G, R, D, B, C, X = "\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[36m", "\033[0m"
+if "--checks" in sys.argv:
+    G, R, D, B, C, X = "\033[32m", "\033[31m", "\033[2m", "\033[1m", "\033[36m", "\033[0m"
+    pg = open("results/pgvector.txt").read().splitlines()
+    print(f"{C}Postgres 16 + pgvector  (results/pgvector.txt){X}")
+    for l in pg[1:]:
+        name, rest = l.split(":", 1)
+        top1 = re.search(r"top-1 (\S+)", rest).group(1)
+        short = re.search(r"short of 5 results (\d+)", rest)
+        ms = re.search(r"([\d.]+) ms/query", rest).group(1)
+        name = name.split("(")[0].replace("iterative_scan=", "iter ").strip()
+        warn = f"{R}{short.group(1)} queries short of 5{X}" if short and short.group(1) != "0" else f"{D}none short{X}"
+        print(f"  {name:28} top-1 {top1:>6}  {ms:>4} ms  {warn}")
+        time.sleep(0.6)
+    llm = open("results/llm_qwen7b.txt").read()
+    print(f"\n{C}Qwen2.5-7B on one A100  (results/llm_qwen7b.txt){X}")
+    print(f"  allowed 'none':  {R}{re.search(r'none' + chr(39) + r' on (\d+)', llm).group(1)} 'none' answers{X}, "
+          f"{re.search(r'(\d+/\d+) had the true SKU', llm).group(1)} wrong")
+    time.sleep(0.6)
+    print(f"  forced choice:   top-1 {B}{re.search(r'FORCED CHOICE  top-1 over all lines: LLM (\S+)', llm).group(1)}{X}  {D}(best picker){X}")
+    time.sleep(0.6)
+    for t, p in re.findall(r"t=(0\.9\S*)\s+auto-accept\s+\S+\s+precision\s+(\S+)", llm.split("FORCED")[1]):
+        print(f"    gate on its confidence >= {t:<6} precision {R}{p}{X}")
+        time.sleep(0.4)
+    sys.exit()
+
 LINES = ["ELIJAH  CRAIG TOASTED BARREL", "SOOH GRAN CENTENARIO REPOSADO", "FLOR DE CANA 12YR CENTENARIO"]
 before = "--before" in sys.argv
 if before:  # the original index: names indexed exactly as the catalog spells them
