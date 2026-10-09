@@ -1,0 +1,25 @@
+catalog 7372 SKUs | gold 386 real queries
+
+1) matching (redirect-aware scoring)
+   BM25, text only            top-1  78.2%   in top-5  96.9%   wrong-size top-1  2.1%
+   BM25 + size filter         top-1  89.1%   in top-5  97.9%   wrong-size top-1  0.0%
+   embeddings + size filter   top-1  89.9%   in top-5  99.0%   wrong-size top-1  0.0%
+   hybrid RRF + size filter   top-1  89.6%   in top-5  97.9%   wrong-size top-1  0.0%
+   only BM25 right 9 | only embeddings right 12
+
+2) confidence gate (overlap margin on size-filtered top-10)
+   margin >= 0.0            auto-accept 100.0%   precision  89.1%   to review 0
+   margin >= 0.1            auto-accept  89.9%   precision  93.4%   to review 39
+   margin >= 0.2            auto-accept  73.1%   precision  97.5%   to review 104
+   margin >= 0.3            auto-accept  59.6%   precision  99.1%   to review 156
+   BM25 & embeddings agree  auto-accept  94.0%   precision  92.6%   to review 23
+   agree AND margin >= 0.3  auto-accept  59.1%   precision  99.6%   to review 158
+
+3) duplicate SKUs
+45 labeled redirect pairs (true duplicates)
+  sim>=0.6: flagged  1804 pairs   recall on redirects  84.4%
+  sim>=0.7: flagged   939 pairs   recall on redirects  77.8%
+  sim>=0.8: flagged   483 pairs   recall on redirects  68.9%
+  sim>=0.9: flagged   303 pairs   recall on redirects  60.0%
+  sim>=1.0: flagged   294 pairs   recall on redirects  60.0%
+   sim>=0.9 pairs 303 | both sold in 2026 55 | a half below median (492) but merged above: 17

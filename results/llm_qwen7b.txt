@@ -1,0 +1,16 @@
+hpc/out_qwen7b.jsonl: 386 answers
+  top-1 over all lines: overlap pick 89.1%   LLM 75.9%
+  LLM answered 'none' on 69 lines (every line has a true match among candidates for 381/386)
+
+  on the 156 review lines: overlap pick right 116   LLM right 97
+
+  overlap gate + LLM on review lines (auto-accept LLM pick if conf >= t)
+    t=0.9    auto-accept  89.1%   precision  93.0%   still to review 42   (LLM added 114, 92 right)
+    t=0.95   auto-accept  87.8%   precision  92.9%   still to review 47   (LLM added 109, 87 right)
+    t=0.99   auto-accept  87.0%   precision  92.9%   still to review 50   (LLM added 106, 84 right)
+    t=0.999  auto-accept  85.0%   precision  93.0%   still to review 58   (LLM added 98, 77 right)
+
+FORCED CHOICE  top-1 over all lines: LLM 91.2%   on review lines: LLM right 124 vs overlap 116
+    t=0.9    auto-accept  98.7%   precision  91.3%   still to review 5   (LLM added 151, 120 right)
+    t=0.99   auto-accept  97.2%   precision  92.0%   still to review 11   (LLM added 145, 117 right)
+    t=0.999  auto-accept  96.4%   precision  92.5%   still to review 14   (LLM added 142, 116 right)

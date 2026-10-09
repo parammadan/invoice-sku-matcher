@@ -71,7 +71,7 @@ own twin. Collapsing identical names before measuring the margin took auto-accep
 at about the same precision. Duplicate SKUs don't just split sales (section 3); they also make
 the matcher under-confident.
 
-Agreement between BM25 and embeddings alone is a poor gate (94% auto-accepted at 92.6%): when both
+Agreement between BM25 and embeddings alone is a poor gate (94.0% auto-accepted at 92.6%): when both
 are wrong, they're usually wrong *together*, on the same text-twin of a duplicate SKU.
 
 ### 3. Duplicate SKUs
@@ -109,7 +109,7 @@ ORDER BY embedding <=> query LIMIT 5`). It reproduces the Python numbers exactly
 
 | | Top-1 | Top-5 | Queries with < 5 results | ms/query |
 |---|---|---|---|---|
-| **Exact: btree size filter, then sort by distance** | **89.9%** | **99.0%** | 0 | 4.7 |
+| **Exact: btree size filter, then sort by distance** | **89.9%** | **99.0%** | 0 | 4.7–5.7 |
 | HNSW, `iterative_scan = off` | 88.9% | 97.9% | **38 (10%)** | 0.3 |
 | HNSW, `iterative_scan = relaxed_order` + exact re-sort | 89.4% | 98.7% | 0 | 0.4 |
 
@@ -117,7 +117,7 @@ ORDER BY embedding <=> query LIMIT 5`). It reproduces the Python numbers exactly
 with a selective filter (one pack/volume) 10% of queries **silently return fewer than 5
 candidates**. That's a review queue missing its right answer, with no error raised.
 pgvector 0.8's iterative scan fixes it, and `relaxed_order` needs an exact re-sort on top.
-**At store-catalog size (thousands of SKUs per size bucket), exact filtered search at ~5 ms is the
+**At store-catalog size (thousands of SKUs per size bucket), exact filtered search at about 5 ms is the
 right call.** HNSW only earns its place across a multi-store or industry-wide catalog.
 
 ### 5. LLM re-ranking: a better picker, a badly calibrated judge

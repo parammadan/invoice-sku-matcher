@@ -1,0 +1,3 @@
+BEFORE twin-collapse fix (overlap_rerank.py @ b28b768), margin >= 0.3:
+   auto-accept 41.5%   precision 99.4%   to review 226
+twin example: JINRO GREEN GRAPE SOJU at 20 x 375 ml -> 2 SKUs: ['965268|20|375', '65268|20|375']

@@ -1,0 +1,4 @@
+2026 descriptions sold at more than one size/pack: 412
+TITOS HANDMADE VODKA size/pack combinations (2026): 7 [('100', '12'), ('100', '1'), ('200', '24'), ('375', '12'), ('750', '12'), ('1000', '12'), ('1750', '6')]
+catalog SKUs: 7372 | gold queries: 386
+PRIVATE FIRST CLASS [('77054|12|750', 1883), ('977054|12|750', 96)]

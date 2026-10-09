@@ -1,0 +1,4 @@
+loaded 7372 products + 386 queries, built indexes in 4.0s
+exact (size filter via btree, then sort by distance): top-1 89.9%  top-5 99.0%  5.7 ms/query
+HNSW, iterative_scan=off          : top-1 88.9%  top-5 97.9%  same top-1 product as exact 99.0%  queries short of 5 results 38  0.3 ms/query
+HNSW, iterative_scan=relaxed_order: top-1 89.4%  top-5 98.7%  same top-1 product as exact 99.5%  queries short of 5 results 0  0.4 ms/query
