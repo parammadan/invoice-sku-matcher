@@ -12,6 +12,10 @@ print(f"{path}: {len(llm)} answers")
 print(f"  top-1 over all lines: overlap pick {sum(x['pick_ok'] for x in q.values())/n:.1%}   LLM {sum(ok(q[i], r) for i, r in llm.items())/n:.1%}")
 print(f"  LLM answered 'none' on {sum(r['choice'] == 0 for r in llm.values())} lines (every line has a true match among candidates for "
       f"{sum(any(c['ok'] for c in x['cands']) for x in q.values())}/{n})")
+nones = sorted(r["conf"] for r in llm.values() if r["choice"] == 0)
+wrong_none = sum(any(c["ok"] for c in q[r["id"]]["cands"]) for r in llm.values() if r["choice"] == 0)
+print(f"  'none' answers: {wrong_none}/{len(nones)} had the true SKU among the candidates; "
+      f"probability >= 0.9 on {sum(c >= 0.9 for c in nones)}/{len(nones)}, median {nones[len(nones)//2]:.3f}")
 rev = [i for i, x in q.items() if not x["auto"]]
 print(f"\n  on the {len(rev)} review lines: overlap pick right {sum(q[i]['pick_ok'] for i in rev)}   LLM right {sum(ok(q[i], llm[i]) for i in rev)}")
 auto = [i for i, x in q.items() if x["auto"]]

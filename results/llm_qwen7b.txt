@@ -1,6 +1,7 @@
 hpc/out_qwen7b.jsonl: 386 answers
   top-1 over all lines: overlap pick 89.1%   LLM 75.9%
   LLM answered 'none' on 69 lines (every line has a true match among candidates for 381/386)
+  'none' answers: 66/69 had the true SKU among the candidates; probability >= 0.9 on 58/69, median 1.000
 
   on the 156 review lines: overlap pick right 116   LLM right 97
 
