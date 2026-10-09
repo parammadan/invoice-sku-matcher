@@ -32,6 +32,11 @@ for (a, b), sim in json.load(open("data/dup_pairs.json")):
         dups.append({"a": nm[a], "b": nm[b], "size": a.split("|", 1)[1].replace("|", " × ") + " ml", "sim": round(sim, 2),
                      "sa": sales.get(a, {}).get("bottles", 0), "sb": sales.get(b, {}).get("bottles", 0)})
 dups.sort(key=lambda d: (-d["sim"], -(d["sa"] + d["sb"])))
+import os
+if os.path.exists("hpc/out_qwen7b.jsonl"):  # LLM forced-choice pick, shown as the reviewer's suggestion
+    for r in map(json.loads, open("hpc/out_qwen7b.jsonl")):
+        p = {int(k): v for k, v in r["probs"].items() if int(k) >= 1}
+        if p: items[r["id"]]["llm"] = max(p, key=p.get) - 1
 json.dump({"gate": GATE, "items": items, "dups": dups}, open("docs/queue.json", "w"), separators=(",", ":"))
 auto = [x for x in items if x["auto"]]
 print(f"{len(items)} lines: {len(auto)} auto ({sum(x['pick_ok'] for x in auto)/len(auto):.1%} correct), "

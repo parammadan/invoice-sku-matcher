@@ -112,9 +112,10 @@ function reviewCard(x) {
   const d = decisions[x.id];
   const name = "c" + x.id;
   const list = x.cands.map((c, i) => {
-    const input = $("input", { type: "radio", name, value: i, checked: d ? d.choice === i : i === 0, disabled: !!d });
+    const sug = x.llm ?? 0;
+    const input = $("input", { type: "radio", name, value: i, checked: d ? d.choice === i : i === sug, disabled: !!d });
     const cls = d ? (c.ok ? " right" : (d.choice === i ? " wrong" : "")) : "";
-    return $("label", { className: "cand" + cls }, input, $("span", { textContent: c.name }), $("span", { className: "tag", textContent: i === 0 ? "suggested" : "" }));
+    return $("label", { className: "cand" + cls }, input, $("span", { textContent: c.name }), $("span", { className: "tag", textContent: [i === sug && "LLM pick", i === 0 && "top match"].filter(Boolean).join(" · ") }));
   });
   const none = $("input", { type: "radio", name, value: -1, checked: d && d.choice === -1, disabled: !!d });
   list.push($("label", { className: "cand" + (d && d.choice === -1 ? " wrong" : "") }, none, $("span", { textContent: "None of these" })));

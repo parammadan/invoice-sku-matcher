@@ -120,21 +120,42 @@ pgvector 0.8's iterative scan fixes it, and `relaxed_order` needs an exact re-so
 **At store-catalog size (thousands of SKUs per size bucket), exact filtered search at ~5 ms is the
 right call.** HNSW only earns its place across a multi-store or industry-wide catalog.
 
-## What didn't work
+### 5. LLM re-ranking: a better picker, a badly calibrated judge
 
-**A local 3B LLM re-ranker (Qwen2.5-3B via Ollama) made things worse.** On a 40-query sample it got
-13/40 vs BM25's 31/40, answered "no match" 24 times when a match existed, and reported ≥ 0.9
-confidence on all 40, so its confidence can't drive a gate. The code (`scripts/rerank.py`) supports
-Ollama or the Anthropic API. A stronger model is the natural next experiment, judged against the
-same gold set.
+Qwen2.5-7B-Instruct, served with vLLM on one A100 (Northeastern's research cluster, about 5 minutes
+of GPU time for all 386 lines). It sees the invoice line plus the review queue's 5 distinct candidates
+and answers with one number. Confidence comes from the **token probabilities** of the candidate
+numbers, not from asking the model to rate itself. The prompt describes catalog noise in general
+terms; it names no tokens copied from this dataset. `hpc/run_llm.py`, `scripts/eval_llm.py`.
+
+| Top-1 correct | All 386 lines | The 156 lines the gate sends to review |
+|---|---|---|
+| Overlap re-ranker | 89.1% | 116 |
+| 7B LLM, may answer "none of these" | 75.9% | 97 |
+| **7B LLM, forced choice among candidates** | **91.2%** | **124** |
+
+- **Allowed to say "none," it says it far too often:** 69 times, with probability ≈ 1.0 on lines like
+  `TYCOGA VODKA` vs `SOOH TYCOGA VODKA`. All 23 of its breaks of correct picks were "none."
+  Forced choice (scored from the same saved probabilities, no second run) fixes that and becomes
+  **the most accurate method here**. It catches abbreviations like `WYCH DR` → `WYCH DOCTOR`.
+- **Its confidence can't drive a gate.** Auto-accepting forced-choice picks at probability ≥ 0.9,
+  0.99 or 0.999 gives about 92% precision every time, because it is almost always "sure."
+- **So the roles split:** the overlap margin decides what skips a human (60% at 99.1%), and the
+  LLM chooses the suggestion shown to the reviewer for everything else (124/156 right vs 116).
+  "None of these" stays a human call.
+
+An earlier attempt with Qwen2.5-**3B** on a laptop (Ollama) got 13/40 vs BM25's 31/40 on a sample
+and reported ≥ 0.9 self-rated confidence on every answer. Self-reported confidence was the first
+thing to go.
 
 ## Limitations
 
 - **Wholesale, not retail:** Iowa data is stores buying from the state, not shoppers buying from stores.
 - **Catalog descriptions, not distributor invoices:** real invoices can be messier (`TITOS HMD VDK`).
   Synthetic abbreviation noise would be a separate, clearly labeled test set.
-- **The LLM prompt names noise tokens** (`SOOH`, `DISCO`) that I saw in this data, so any LLM score
-  here would be optimistic without a held-out split.
+- **The local Ollama prompt (`scripts/rerank.py`) names noise tokens** seen in this data; the reported 7B
+  results use the generic prompt in `scripts/export_llm_prompts.py` instead.
+- **LLM candidates come from the matcher:** the true SKU is among the 5 for 381 of 386 lines, which caps LLM top-1.
 - **Duplicate-pair precision is eyeballed,** not measured.
 - **2026 is year-to-date** (through early October).
 
@@ -164,7 +185,8 @@ python3 -I scripts/pg_eval.py
 | `scripts/overlap_rerank.py` | IDF-weighted overlap re-score + margin confidence |
 | `scripts/equiv.py` | `USE CODE` redirect resolution + equivalence for scoring |
 | `scripts/dedupe.py` | duplicate-SKU detection with recall on redirects |
-| `scripts/rerank.py` | optional LLM re-ranker (Ollama or Anthropic) |
+| `scripts/rerank.py` | optional local LLM re-ranker (Ollama or Anthropic API) |
+| `scripts/export_llm_prompts.py`, `hpc/run_llm.py`, `scripts/eval_llm.py` | 7B vLLM batch re-rank + scoring |
 | `scripts/pg_eval.py` | the same search in Postgres + pgvector: exact vs HNSW |
 | `scripts/build_queue.py`, `docs/` | the review-queue page (static, GitHub Pages) |
 | `scripts/report.py` | every number in sections 1–3 |
