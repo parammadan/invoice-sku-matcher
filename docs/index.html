@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice Review Queue</title>
+<style>
+:root {
+  --bg: #f7f6f2; --panel: #ffffff; --ink: #1b1b18; --muted: #6b6a63; --line: #e3e1d9;
+  --accent: #7a2e3a; --accent-soft: #f3e6e8; --ok: #1f6f43; --ok-soft: #e3f2e9; --bad: #a3322a; --bad-soft: #f7e4e2;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #151513; --panel: #1e1e1b; --ink: #ecebe5; --muted: #9a998f; --line: #33322d;
+    --accent: #d98a97; --accent-soft: #3a2328; --ok: #6fcf97; --ok-soft: #1d3326; --bad: #ef8a80; --bad-soft: #3b2220;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #151513; --panel: #1e1e1b; --ink: #ecebe5; --muted: #9a998f; --line: #33322d;
+  --accent: #d98a97; --accent-soft: #3a2328; --ok: #6fcf97; --ok-soft: #1d3326; --bad: #ef8a80; --bad-soft: #3b2220;
+}
+* { box-sizing: border-box; }
+html, body { overflow-x: hidden; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 920px; margin: 0 auto; padding: 28px 16px 64px; }
+h1 { font-size: 26px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0 0 22px; }
+.sub a { color: var(--accent); }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 22px; }
+.stat { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.stat b { display: block; font-size: 24px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+.tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 16px; overflow-x: auto; }
+.tabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 12px; font: inherit; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin-bottom: 12px; color: var(--muted); font-size: 14px; }
+.bar label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; }
+.line { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.meta { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+.cand { display: flex; gap: 10px; align-items: flex-start; padding: 7px 8px; border-radius: 7px; cursor: pointer; overflow-wrap: anywhere; }
+.cand:hover { background: var(--accent-soft); }
+.cand input { margin-top: 4px; accent-color: var(--accent); }
+.cand .tag { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+.cand.right { background: var(--ok-soft); }
+.cand.wrong { background: var(--bad-soft); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.btn { font: inherit; font-size: 14px; padding: 6px 12px; border-radius: 7px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); cursor: pointer; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--panel); }
+.btn:disabled { opacity: .45; cursor: default; }
+.verdict { font-size: 14px; margin-top: 8px; }
+.verdict.ok { color: var(--ok); } .verdict.bad { color: var(--bad); }
+table { width: 100%; border-collapse: collapse; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pill { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 99px; background: var(--ok-soft); color: var(--ok); }
+.pill.bad { background: var(--bad-soft); color: var(--bad); }
+.scroll { overflow-x: auto; }
+.more { display: block; margin: 14px auto 0; }
+footer { color: var(--muted); font-size: 13px; margin-top: 32px; }
+@media (max-width: 560px) { .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>Invoice review queue</h1>
+  <p class="sub">Invoice line → SKU matching on real Iowa liquor data (2024–26). Lines the matcher is sure about are auto-accepted; the rest land here for a human.
+    <a href="https://github.com/parammadan/invoice-sku-matcher">Code, method and limitations →</a></p>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="review" aria-selected="true">Needs review</button>
+    <button role="tab" data-tab="auto" aria-selected="false">Auto-accepted</button>
+    <button role="tab" data-tab="dups" aria-selected="false">Duplicate SKUs</button>
+  </div>
+  <section id="view"></section>
+
+  <footer>All 386 lines are real descriptions from Iowa's open data; each one's true SKU is known, so you can check yourself. Your choices stay in this browser.</footer>
+</main>
+<script>
+const $ = (tag, props = {}, ...kids) => { const el = Object.assign(document.createElement(tag), props); el.append(...kids); return el; };
+const pct = x => (100 * x).toFixed(1) + "%";
+const store = {
+  get() { try { return JSON.parse(localStorage.getItem("queue-decisions") || "{}"); } catch { return {}; } },
+  set(v) { try { localStorage.setItem("queue-decisions", JSON.stringify(v)); } catch {} },
+};
+let data, decisions = store.get(), tab = "review", limit = 25, hideDone = false;
+
+fetch("queue.json").then(r => r.json()).then(d => { data = d; render(); });
+
+document.querySelectorAll(".tabs button").forEach(b => b.onclick = () => {
+  tab = b.dataset.tab; limit = 25;
+  document.querySelectorAll(".tabs button").forEach(x => x.setAttribute("aria-selected", x === b));
+  render();
+});
+
+function stats() {
+  const it = data.items, auto = it.filter(x => x.auto), rev = it.filter(x => !x.auto);
+  const done = rev.filter(x => decisions[x.id]), right = done.filter(x => decisions[x.id].ok);
+  const tiles = [
+    [auto.length + " / " + it.length, "auto-accepted (" + pct(auto.length / it.length) + ")"],
+    [pct(auto.filter(x => x.pick_ok).length / auto.length), "auto-accepts correct"],
+    [rev.length, "sent to review"],
+    [done.length ? right.length + " / " + done.length : "–", "your review accuracy"],
+  ];
+  document.getElementById("stats").replaceChildren(...tiles.map(([b, s]) => $("div", { className: "stat" }, $("b", { textContent: b }), $("span", { textContent: s }))));
+}
+
+function reviewCard(x) {
+  const d = decisions[x.id];
+  const name = "c" + x.id;
+  const list = x.cands.map((c, i) => {
+    const input = $("input", { type: "radio", name, value: i, checked: d ? d.choice === i : i === 0, disabled: !!d });
+    const cls = d ? (c.ok ? " right" : (d.choice === i ? " wrong" : "")) : "";
+    return $("label", { className: "cand" + cls }, input, $("span", { textContent: c.name }), $("span", { className: "tag", textContent: i === 0 ? "suggested" : "" }));
+  });
+  const none = $("input", { type: "radio", name, value: -1, checked: d && d.choice === -1, disabled: !!d });
+  list.push($("label", { className: "cand" + (d && d.choice === -1 ? " wrong" : "") }, none, $("span", { textContent: "None of these" })));
+  const card = $("div", { className: "card" },
+    $("div", { className: "line", textContent: x.line }),
+    $("div", { className: "meta", textContent: `${x.pack} × ${x.ml} ml · confidence margin ${x.margin.toFixed(2)} (gate ≥ ${data.gate})` }),
+    ...list);
+  if (d) {
+    card.append($("div", { className: "verdict " + (d.ok ? "ok" : "bad"), textContent: d.ok ? "✓ Correct" : "✗ True SKU: " + x.truth }),
+      $("div", { className: "actions" }, $("button", { className: "btn", textContent: "Undo", onclick: () => { delete decisions[x.id]; store.set(decisions); render(); } })));
+  } else {
+    card.append($("div", { className: "actions" }, $("button", { className: "btn primary", textContent: "Confirm match", onclick: () => {
+      const v = +card.querySelector(`input[name=${name}]:checked`).value;
+      decisions[x.id] = { choice: v, ok: v >= 0 && x.cands[v].ok };
+      store.set(decisions); render();
+    } })));
+  }
+  return card;
+}
+
+function render() {
+  stats();
+  const view = document.getElementById("view");
+  if (tab === "review") {
+    let rev = data.items.filter(x => !x.auto).sort((a, b) => a.margin - b.margin);
+    const open = rev.filter(x => !decisions[x.id]).length;
+    if (hideDone) rev = rev.filter(x => !decisions[x.id]);
+    const box = $("input", { type: "checkbox", checked: hideDone, onchange: e => { hideDone = e.target.checked; render(); } });
+    view.replaceChildren(
+      $("div", { className: "bar" }, $("span", { textContent: `${open} open · lowest confidence first` }), $("label", {}, box, "Hide reviewed")),
+      ...rev.slice(0, limit).map(reviewCard), more(rev.length));
+  } else if (tab === "auto") {
+    const auto = data.items.filter(x => x.auto).sort((a, b) => a.pick_ok - b.pick_ok || a.margin - b.margin);
+    const rows = auto.slice(0, limit).map(x => $("tr", {},
+      $("td", { className: "line", textContent: x.line }), $("td", { textContent: x.cands[0].name }),
+      $("td", { className: "num hide-sm", textContent: x.margin.toFixed(2) }),
+      $("td", {}, $("span", { className: "pill" + (x.pick_ok ? "" : " bad"), textContent: x.pick_ok ? "correct" : "wrong" }))));
+    view.replaceChildren(
+      $("div", { className: "bar" }, $("span", { textContent: `${auto.length} lines matched with no human · mistakes listed first` })),
+      $("div", { className: "scroll" }, $("table", {}, $("thead", {}, $("tr", {}, ...["Invoice line", "Matched SKU", "Margin", ""].map((h, i) => $("th", { textContent: h, className: i === 2 ? "num hide-sm" : "" })))), $("tbody", {}, ...rows))),
+      more(auto.length));
+  } else {
+    const rows = data.dups.slice(0, limit).map(p => $("tr", {},
+      $("td", { textContent: p.a }), $("td", { textContent: p.b }), $("td", { className: "hide-sm", textContent: p.size }),
+      $("td", { className: "num", textContent: p.sim.toFixed(2) }),
+      $("td", { className: "num hide-sm", textContent: `${p.sa.toLocaleString()} + ${p.sb.toLocaleString()}` })));
+    view.replaceChildren(
+      $("div", { className: "bar" }, $("span", { textContent: `${data.dups.length} same-size SKU pairs with similarity ≥ 0.8 · 1.0 = auto-flag, 0.8–1.0 = review` })),
+      $("div", { className: "scroll" }, $("table", {}, $("thead", {}, $("tr", {}, ...["SKU A", "SKU B", "Size", "Sim", "2026 bottles"].map((h, i) => $("th", { textContent: h, className: (i === 2 ? "hide-sm" : "") + (i >= 3 ? " num" : "") + (i === 4 ? " hide-sm" : "") })))), $("tbody", {}, ...rows))),
+      more(data.dups.length));
+  }
+}
+
+function more(total) {
+  if (limit >= total) return "";
+  return $("button", { className: "btn more", textContent: `Show more (${total - limit} left)`, onclick: () => { limit += 25; render(); } });
+}
+</script>
+</body>
+</html>

@@ -4,6 +4,8 @@ A small, free, fully reproducible study of the matching step behind invoice rece
 given a distributor line like `SOOH FLOR DE CANA 12YR CENTENARIO`, find the store's catalog SKU,
 **at the right size**, and know when to ask a human instead.
 
+**[Try the review queue →](https://parammadan.github.io/invoice-sku-matcher/)**: the gate's real decisions on all 386 lines, with the true SKU revealed after you choose.
+
 Everything runs on a laptop: Python's standard library plus a local [Ollama](https://ollama.com) embedding model. No API keys, no paid models.
 
 ## Data (all real)
@@ -50,20 +52,27 @@ because no text matcher could separate them.
 
 Candidates are re-scored by IDF-weighted symmetric token overlap. Extra words on either side
 (`RASPBERRY`, `15YR`) cost a lot; frequent catalog noise (`SOOH`, `PET`) costs little, with no hand
-rules. The margin between candidates 1 and 2 is the confidence.
+rules. Confidence is the margin between the top candidate and the best **different** product.
 
 | Gate | Auto-accepted | Precision of auto-accepts | Sent to review |
 |---|---|---|---|
-| none | 100% | 89.4% | 0 |
-| margin ≥ 0.2 | 51.8% | 97.0% | 186 |
-| **margin ≥ 0.3** | **41.5%** | **99.4%** | 226 |
-| BM25 and embeddings agree | 94.3% | 92.6% | 22 |
+| none | 100% | 89.1% | 0 |
+| margin ≥ 0.2 | 73.1% | 97.5% | 104 |
+| **margin ≥ 0.3** | **59.6%** | **99.1%** | 156 |
+| margin ≥ 0.3 **and** BM25 + embeddings agree | 59.1% | 99.6% | 158 |
 
-**41.5% of lines need no human, and those are right 99.4% of the time.** The rest go to a review
+**60% of lines need no human, and those are right 99.1% of the time.** The rest go to a review
 queue with candidates already ranked: embeddings put the right answer in the top 5 for 99.0% of lines.
 
-Agreement between BM25 and embeddings sounds like a good confidence signal but isn't: when both
-are wrong, they're usually wrong *together*, picking the same text-twin of a duplicate SKU (section 3).
+**Bug worth knowing about:** the first version of the gate auto-accepted only 41.5%. The catalog
+holds exact-twin SKUs (two `JINRO GREEN GRAPE SOJU` at 20 × 375 ml), so the top two candidates
+were the same product and the margin was 0: the matcher looked "unsure" between a product and its
+own twin. Collapsing identical names before measuring the margin took auto-accept from 41.5% to 59.6%
+at about the same precision. Duplicate SKUs don't just split sales (section 3); they also make
+the matcher under-confident.
+
+Agreement between BM25 and embeddings alone is a poor gate (94% auto-accepted at 92.6%): when both
+are wrong, they're usually wrong *together*, on the same text-twin of a duplicate SKU.
 
 ### 3. Duplicate SKUs
 
@@ -157,4 +166,5 @@ python3 -I scripts/pg_eval.py
 | `scripts/dedupe.py` | duplicate-SKU detection with recall on redirects |
 | `scripts/rerank.py` | optional LLM re-ranker (Ollama or Anthropic) |
 | `scripts/pg_eval.py` | the same search in Postgres + pgvector: exact vs HNSW |
+| `scripts/build_queue.py`, `docs/` | the review-queue page (static, GitHub Pages) |
 | `scripts/report.py` | every number in sections 1–3 |
